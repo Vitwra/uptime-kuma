@@ -1,0 +1,1 @@
+﻿# Padrões e Code Smells
