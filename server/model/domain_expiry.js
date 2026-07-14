@@ -281,9 +281,25 @@ class DomainExpiry extends BeanModel {
 
         if (bean?.lastCheck && dayjs.utc().diff(dayjs.utc(bean.lastCheck), "day") < 1) {
             log.debug("domain_expiry", `Domain expiry already checked recently for ${bean.domain}, won't re-check.`);
+            // The cached value may be invalid for domains whose RDAP server does not
+            // publish an expiry date. Honour the documented contract and return
+            // undefined instead of a truthy but unusable value.
+            if (!bean.expiry || isNaN(new Date(bean.expiry).getTime())) {
+                return;
+            }
             return bean.expiry;
         } else if (bean) {
             expiryDate = await bean.getExpiryDate();
+
+            // The RDAP server for this TLD responds, but does not provide an expiry
+            // date (e.g. .no). Persist the check timestamp so the cache still works,
+            // but keep `expiry` NULL rather than storing an invalid date.
+            if (expiryDate === null) {
+                bean.expiry = null;
+                bean.lastCheck = R.isoDateTimeMillis(dayjs.utc());
+                await R.store(bean);
+                return;
+            }
 
             if (dayjs.utc(expiryDate).isAfter(dayjs.utc(bean.expiry))) {
                 bean.lastExpiryNotificationSent = null;
@@ -293,11 +309,7 @@ class DomainExpiry extends BeanModel {
             bean.lastCheck = R.isoDateTimeMillis(dayjs.utc());
             await R.store(bean);
         }
-
-        if (expiryDate === null) {
-            return;
-        }
-
+        
         return expiryDate;
     }
 
