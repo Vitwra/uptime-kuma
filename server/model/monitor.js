@@ -12,23 +12,10 @@ const {
     MIN_INTERVAL_SECOND,
     SQL_DATETIME_FORMAT,
     evaluateJsonQuery,
-    PING_PACKET_SIZE_MIN,
-    PING_PACKET_SIZE_MAX,
-    PING_PACKET_SIZE_DEFAULT,
-    PING_GLOBAL_TIMEOUT_MIN,
-    PING_GLOBAL_TIMEOUT_MAX,
-    PING_GLOBAL_TIMEOUT_DEFAULT,
-    PING_COUNT_MIN,
-    PING_COUNT_MAX,
-    PING_COUNT_DEFAULT,
-    PING_PER_REQUEST_TIMEOUT_MIN,
-    PING_PER_REQUEST_TIMEOUT_MAX,
-    PING_PER_REQUEST_TIMEOUT_DEFAULT,
     RESPONSE_BODY_LENGTH_DEFAULT,
     RESPONSE_BODY_LENGTH_MAX,
 } = require("../../src/util");
 const {
-    ping,
     checkCertificate,
     checkStatusCode,
     getTotalClientInRoom,
@@ -721,18 +708,6 @@ class Monitor extends BeanModel {
                             );
                         }
                     }
-                } else if (this.type === "ping") {
-                    bean.ping = await ping(
-                        this.hostname,
-                        this.ping_count,
-                        "",
-                        this.ping_numeric,
-                        this.packetSize,
-                        this.timeout,
-                        this.ping_per_request_timeout
-                    );
-                    bean.msg = "";
-                    bean.status = UP;
                 } else if (this.type === "push") {
                     // Type: Push
                     log.debug(
@@ -1692,45 +1667,11 @@ class Monitor extends BeanModel {
             }
         }
 
-        if (this.type === "ping") {
-            // ping parameters validation
-            if (this.packetSize && (this.packetSize < PING_PACKET_SIZE_MIN || this.packetSize > PING_PACKET_SIZE_MAX)) {
-                throw new Error(
-                    `Packet size must be between ${PING_PACKET_SIZE_MIN} and ${PING_PACKET_SIZE_MAX} (default: ${PING_PACKET_SIZE_DEFAULT})`
-                );
-            }
-
-            if (
-                this.ping_per_request_timeout &&
-                (this.ping_per_request_timeout < PING_PER_REQUEST_TIMEOUT_MIN ||
-                    this.ping_per_request_timeout > PING_PER_REQUEST_TIMEOUT_MAX)
-            ) {
-                throw new Error(
-                    `Per-ping timeout must be between ${PING_PER_REQUEST_TIMEOUT_MIN} and ${PING_PER_REQUEST_TIMEOUT_MAX} seconds (default: ${PING_PER_REQUEST_TIMEOUT_DEFAULT})`
-                );
-            }
-
-            if (this.ping_count && (this.ping_count < PING_COUNT_MIN || this.ping_count > PING_COUNT_MAX)) {
-                throw new Error(
-                    `Echo requests count must be between ${PING_COUNT_MIN} and ${PING_COUNT_MAX} (default: ${PING_COUNT_DEFAULT})`
-                );
-            }
-
-            if (this.timeout) {
-                const pingGlobalTimeout = Math.round(Number(this.timeout));
-
-                if (
-                    pingGlobalTimeout < this.ping_per_request_timeout ||
-                    pingGlobalTimeout < PING_GLOBAL_TIMEOUT_MIN ||
-                    pingGlobalTimeout > PING_GLOBAL_TIMEOUT_MAX
-                ) {
-                    throw new Error(
-                        `Timeout must be between ${PING_GLOBAL_TIMEOUT_MIN} and ${PING_GLOBAL_TIMEOUT_MAX} seconds (default: ${PING_GLOBAL_TIMEOUT_DEFAULT})`
-                    );
-                }
-
-                this.timeout = pingGlobalTimeout;
-            }
+        // Delegate type-specific validation to the monitor type (Strategy),
+        // instead of hard-coding each type in this method.
+        const monitorType = UptimeKumaServer.monitorTypeList[this.type];
+        if (monitorType) {
+            monitorType.validate(this);
         }
 
         if (this.type === "real-browser") {

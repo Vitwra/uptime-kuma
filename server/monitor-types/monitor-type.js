@@ -33,6 +33,21 @@ class MonitorType {
     async check(monitor, heartbeat, server) {
         throw new Error("You need to override check()");
     }
+
+    /**
+     * Validate the monitor configuration for this type.
+     *
+     * Called before the monitor is saved. Throw an error with a descriptive
+     * message if the configuration is invalid.
+     *
+     * The default implementation performs no type-specific validation, so
+     * existing monitor types remain unaffected (Open/Closed Principle).
+     * @param {Monitor} monitor Monitor to validate
+     * @returns {void}
+     */
+    validate(monitor) {
+        // No type-specific validation by default.
+    }
 }
 
 module.exports = {
