@@ -184,6 +184,7 @@
         "core-js": "~3.26.1",
         "cronstrue": "~2.24.0",
         "cross-env": "~7.0.3",
+        "cypress": "^15.18.0",
         "dns2": "~2.0.5",
         "dompurify": "~3.4.0",
         "eslint": "~8.14.0",
