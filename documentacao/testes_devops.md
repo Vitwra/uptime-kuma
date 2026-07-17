@@ -91,45 +91,87 @@ Para acompanhar os testes pelo navegador:
 npx cypress open
 ```
 
+
 ### Resultados
 
-A suíte possui três testes de aceitação:
+A suíte possui três testes de aceitação automatizados:
 
 1. Criação de um monitor HTTP.
 2. Pausa e retomada de um monitor existente.
 3. Exclusão de um monitor.
 
-Na execução em modo headless (`cypress run`), dois testes passam (criação e
-exclusão) e um fica pendente (`it.skip` — pausa e retomada), pelo motivo detalhado
-nas limitações. Nenhum teste falha:
+Os três cenários foram executados com sucesso em modo headless, utilizando o comando:
 
-    √  cria um monitor HTTP e o exibe no painel
-    -  pausa e retoma um monitor existente   (pending)
-    √  exclui um monitor e ele desaparece do painel
+```bash
+npx cypress run --spec "cypress/e2e/monitor.cy.ts"
+```
 
-    2 passing, 1 pending — All specs passed!
+Resultado da execução:
+
+```text
+√ cria um monitor HTTP e o exibe no painel
+√ pausa e retoma um monitor existente
+√ exclui um monitor e ele desaparece do painel
+
+3 passing
+0 failing
+0 pending
+0 skipped
+```
+
+A execução demonstrou que os três fluxos funcionam corretamente no ambiente automatizado do Cypress. Os testes exercitam operações realizadas pelo usuário, incluindo autenticação, preenchimento de formulário, criação de dados, interação com modais de confirmação e atualização da interface.
 
 ### Limitações
 
-**Teste de pausa/retomada desabilitado no modo headless.** A funcionalidade foi
-validada de duas formas: manualmente na interface e pelo próprio teste automatizado,
-que passa no modo interativo (`cypress open`). Ele falha apenas no modo headless
-(`cypress run`), tanto em Electron quanto em Chrome, por uma incompatibilidade
-conhecida entre a animação do modal de confirmação (Bootstrap 5, com
-`data-bs-dismiss`) e o detector de "elemento clicável" do Cypress: durante a
-animação, o overlay `.modal.fade.show` é reportado como cobrindo o próprio botão de
-confirmação. As mitigações padrão foram testadas sem sucesso no headless
-(`{ force: true }`, `.trigger("click")`, espera por `opacity: 1`, e desabilitar as
-transições CSS). O teste foi mantido no código, documentado e marcado como `it.skip`.
-A limitação é da automação em modo headless, não da aplicação — os testes de criação
-e exclusão exercitam os mesmos mecanismos (formulário, WebSocket e modal) e passam
-de forma consistente.
+Os testes dependem de uma instância local do Uptime Kuma em execução e de um usuário administrador previamente configurado.
 
-Os testes dependem de uma instância local em execução e de um usuário administrador
-previamente configurado. Cada teste cria seus próprios dados com nome único (baseado
-em timestamp), o que garante independência entre os cenários mas deixa monitores
-residuais no banco de desenvolvimento.
+Cada teste cria seus próprios dados utilizando nomes únicos baseados na data e hora da execução. Essa estratégia garante independência entre os cenários e permite que cada teste seja executado isoladamente. Entretanto, os testes de criação e de pausa e retomada podem deixar monitores residuais no banco de dados utilizado no ambiente de desenvolvimento.
+
+O tempo total de execução pode variar de acordo com o desempenho da máquina, o carregamento da aplicação e o tempo de resposta do endereço utilizado no monitor HTTP.
 
 ## DevOps
 
-A configuração e a análise da integração contínua serão documentadas nesta seção.
+### Análise do pipeline existente
+
+O projeto utiliza GitHub Actions para automatizar verificações executadas a cada push e pull request. O principal workflow, localizado em `.github/workflows/auto-test.yml`, possui os seguintes jobs:
+
+- `auto-test`: realiza o build e executa os testes de backend em diferentes sistemas operacionais e versões do Node.js;
+- `check-linters`: executa as verificações de qualidade de código com o ESLint;
+- `e2e-test`: executa os testes de ponta a ponta já existentes no projeto com Playwright;
+- `armv7-simple-test`: verifica a instalação das dependências de produção em uma arquitetura ARMv7 utilizando Docker e QEMU.
+
+### Problema identificado
+
+O pipeline possuía uma configuração de cache do diretório `node_modules`, mas ela estava desabilitada devido a preocupações relacionadas à segurança da cadeia de dependências.
+
+Sem um mecanismo alternativo de cache, os jobs precisavam baixar novamente todas as dependências a cada execução. Como o workflow utiliza diversas combinações de sistemas operacionais e versões do Node.js, isso aumenta o tempo de execução e o consumo de minutos dos runners.
+
+A configuração antiga não foi simplesmente reativada porque armazenava a árvore de dependências já instalada, incluindo scripts de instalação que poderiam permanecer no cache em caso de comprometimento de algum pacote.
+
+### Melhoria implementada
+
+Foi habilitado o cache nativo do npm por meio da action `actions/setup-node`:
+
+```yaml
+with:
+  node-version: ${{ matrix.node }}
+  cache: npm
+```
+
+A melhoria foi aplicada aos jobs `auto-test`, `check-linters` e `e2e-test`, que realizam a instalação das dependências.
+
+Diferentemente do cache direto de `node_modules`, o cache nativo do `setup-node` armazena os pacotes baixados pelo npm. O comando `npm clean-install` continua sendo executado normalmente, instalando as dependências do zero e validando sua integridade de acordo com o arquivo `package-lock.json`.
+
+O job `armv7-simple-test` não foi alterado, pois a instalação ocorre dentro de um contêiner ARM executado por meio do QEMU e não utiliza a action `setup-node`.
+
+### Benefícios da melhoria
+
+A alteração proporciona os seguintes benefícios:
+
+- redução do tempo gasto com o download das dependências;
+- reaproveitamento seguro do cache entre as execuções;
+- menor consumo de minutos dos runners do GitHub Actions;
+- manutenção das verificações de integridade realizadas pelo npm;
+- nenhuma alteração no comportamento do build ou dos testes.
+
+A solução melhora o desempenho do pipeline sem reativar o cache de `node_modules` que havia sido desabilitado pelos mantenedores por razões de segurança.
