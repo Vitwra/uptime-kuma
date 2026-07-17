@@ -9,7 +9,7 @@
 > **Commit base da análise:** `62a2d01d3f2eb6df47e1c987b7819bead6a91e2e` (13/07/2026)
 > **Fork:** https://github.com/Vitwra/uptime-kuma
 >
-> **Dupla:** `<NOME 1>` e `<NOME 2>`
+> **Dupla:** `Vitor Angelo dos Santos` e `Eduarda Gomes Camilo`
 
 ---
 
